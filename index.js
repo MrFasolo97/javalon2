@@ -213,6 +213,22 @@ let avalon = {
         r.signature = bs58.encode(signature.signature)
         return r
     },
+    signData: (privKey, pubKey, data, username = null) => {
+        // sign off-chain data
+        const r = { data };
+        if (username !== null) {
+            r.username = username;
+        }
+        // add timestamp to seed the hash (avoid hash reuse)
+        r.ts = new Date().getTime();
+        // hash the data
+        r.hash = CryptoJS.SHA256(JSON.stringify(r)).toString();
+        // sign the data
+        const signature = secp256k1.ecdsaSign(Buffer.from(r.hash, 'hex'), bs58.decode(privKey));
+        r.signature = bs58.encode(signature.signature);
+        r.pubKey = pubKey;
+        return r;
+    },
     signMultisig: (privKeys = [], sender, tx) => {
         if (typeof tx !== 'object')
             try {
@@ -237,34 +253,38 @@ let avalon = {
         }
         return tx
     },
-    signVerify: (pubKey, data, username = undefined, maxAge = 60000) => {
-        // Verify for off-chain signature of data
-        // signed in the last minute (or maxAge in milliseconds), if a username is supplied 
-        // check also for pubkey ownership on-chain
-        if (typeof data !== 'object')
-            try {
-                data = JSON.parse(data)
-            } catch(e) {
-                console.log('invalid data')
-                return
-            }
-        if (typeof username !== 'undefined') {
-            let key = false
-            let account = getAccount(username)
-            for (var i in account.keys) {
-                if (pubKey == account.keys[i]) {
-                    key = true
+    signVerify: (data, username = undefined, maxAge = 60000) => {
+      // Verify for off-chain signature of data
+      // signed in the last minute (or maxAge in milliseconds), if a username is supplied
+      // check also for pubkey ownership on-chain
+      if (typeof data === 'undefined') {
+        console.log('invalid data');
+        return false;
+      }
+      pubKey = data.pubKey;
+      if (typeof username !== 'undefined') {
+        const prom = new Promise((resolve, reject) => avalon.getAccount(username, (err, account) => {
+          if (typeof account !== 'undefined') {
+            for (const i in account.keys) {
+              if (pubKey == account.keys[i].pub) {
+                // console.log("Found pubkey!")
+                ts = Date.now();
+                if (ts - maxAge < data.ts) {
+                  if (secp256k1.ecdsaVerify(bs58.decode(data.signature), Buffer.from(data.hash, 'hex'), bs58.decode(pubKey))) return resolve(true);
+                  return reject(false);
                 }
+                return reject(false);
+              } if (i == account.keys.length) {
+                return reject(false);
+              }
             }
-        } else {
-            let key = true
-        }
-        ts = new Date().getTime()
-        if (key && ts-maxAge <= data.ts) {
-            return secp256k1.verify(data.signature, Buffer.from(data.hash, 'hex'), bs58.decode(pubKey))
-        } else {
-            return false
-        }
+          } else {
+            reject(err);
+          }
+        }));
+        return prom;
+      }
+      return secp256k1.ecdsaVerify(bs58.decode(data.signature), Buffer.from(data.hash, 'hex'), bs58.decode(pubKey));
     },
     sendTransaction: (tx, cb) => {
         // sends a transaction to a node
