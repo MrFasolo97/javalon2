@@ -215,7 +215,7 @@ let avalon = {
     },
     signData: (privKey, pubKey, data, username = null) => {
         // sign off-chain data
-        const r = { data };
+        let r = { data: data };
         if (username !== null) {
             r.username = username;
         }
@@ -261,15 +261,18 @@ let avalon = {
         console.log('invalid data');
         return false;
       }
-      pubKey = data.pubKey;
+      let pubKey = data.pubKey;
       if (typeof username !== 'undefined') {
         const prom = new Promise((resolve, reject) => avalon.getAccount(username, (err, account) => {
           if (typeof account !== 'undefined') {
             for (const i in account.keys) {
               if (pubKey == account.keys[i].pub) {
-                // console.log("Found pubkey!")
                 ts = Date.now();
                 if (ts - maxAge < data.ts) {
+                  if (CryptoJS.SHA256(JSON.stringify(data.data)).toString() !== data.hash) {
+                    console.log("Hash mismatch!");
+                    return reject(false);
+                  }
                   if (secp256k1.ecdsaVerify(bs58.decode(data.signature), Buffer.from(data.hash, 'hex'), bs58.decode(pubKey))) return resolve(true);
                   return reject(false);
                 }
