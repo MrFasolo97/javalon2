@@ -201,33 +201,20 @@ let avalon = {
         tx.signature = bs58.encode(signature.signature)
         return tx
     },
-    signData: (privKey, data) => {
+    signData: (privKey, pubKey, data, ts, username = null) => {
         // sign off-chain data
-        r = { data : data }
+        const r = { data: data }
+        if (username !== null)
+            r.username = username
         // add timestamp to seed the hash (avoid hash reuse)
-        r.ts = new Date().getTime()
+        r.ts = ts
         // hash the data
         r.hash = CryptoJS.SHA256(JSON.stringify(r)).toString()
         // sign the data
-        let signature = secp256k1.ecdsaSign(Buffer.from(r.hash, 'hex'), bs58.decode(privKey))
+        const signature = secp256k1.ecdsaSign(Buffer.from(r.hash, 'hex'), bs58.decode(privKey))
         r.signature = bs58.encode(signature.signature)
+        r.pubkey = pubKey
         return r
-    },
-    signData: (privKey, pubKey, data, username = null) => {
-        // sign off-chain data
-        let r = { data: data };
-        if (username !== null) {
-            r.username = username;
-        }
-        // add timestamp to seed the hash (avoid hash reuse)
-        r.ts = new Date().getTime();
-        // hash the data
-        r.hash = CryptoJS.SHA256(JSON.stringify(r)).toString();
-        // sign the data
-        const signature = secp256k1.ecdsaSign(Buffer.from(r.hash, 'hex'), bs58.decode(privKey));
-        r.signature = bs58.encode(signature.signature);
-        r.pubKey = pubKey;
-        return r;
     },
     signMultisig: (privKeys = [], sender, tx) => {
         if (typeof tx !== 'object')
@@ -254,40 +241,38 @@ let avalon = {
         return tx
     },
     signVerify: (data, username = undefined, maxAge = 60000) => {
-      // Verify for off-chain signature of data
-      // signed in the last minute (or maxAge in milliseconds), if a username is supplied
-      // check also for pubkey ownership on-chain
-      if (typeof data === 'undefined') {
-        console.log('invalid data');
-        return false;
-      }
-      let pubKey = data.pubKey;
-      if (typeof username !== 'undefined') {
-        const prom = new Promise((resolve, reject) => avalon.getAccount(username, (err, account) => {
-          if (typeof account !== 'undefined') {
-            for (const i in account.keys) {
-              if (pubKey == account.keys[i].pub) {
-                ts = Date.now();
-                if (ts - maxAge < data.ts) {
-                  if (CryptoJS.SHA256(JSON.stringify(data.data)).toString() !== data.hash) {
-                    console.log("Hash mismatch!");
-                    return reject(false);
-                  }
-                  if (secp256k1.ecdsaVerify(bs58.decode(data.signature), Buffer.from(data.hash, 'hex'), bs58.decode(pubKey))) return resolve(true);
-                  return reject(false);
-                }
-                return reject(false);
-              } if (i == account.keys.length) {
-                return reject(false);
-              }
-            }
-          } else {
-            reject(err);
-          }
-        }));
-        return prom;
-      }
-      return secp256k1.ecdsaVerify(bs58.decode(data.signature), Buffer.from(data.hash, 'hex'), bs58.decode(pubKey));
+        // Verify for off-chain signature of data
+        // signed in the last minute (or maxAge in milliseconds), if a username is supplied
+        // check also for pubkey ownership on-chain
+        if (typeof data === 'undefined') {
+            console.log('invalid data')
+            return false
+        }
+        let pubKey = data.pubKey
+        if (typeof username !== 'undefined') {
+            const prom = new Promise((resolve, reject) => avalon.getAccount(username, (err, account) => {
+                const ts = Date.now()
+                if (typeof account !== 'undefined')
+                    for (const i in account.keys) {
+                        if (pubKey === account.keys[i].pub) {
+                            if (ts - maxAge < data.ts) {
+                                if (CryptoJS.SHA256(JSON.stringify(data.data)).toString() !== data.hash) {
+                                    console.log('Hash mismatch!')
+                                    reject(false)
+                                }
+                                if (secp256k1.ecdsaVerify(bs58.decode(data.signature), Buffer.from(data.hash, 'hex'), bs58.decode(pubKey))) return resolve(true)
+                                reject(false)
+                            }
+                            reject(false)
+                        } if (i === account.keys.length)
+                            reject(false)
+                    }
+                else
+                    reject(err)
+            }))
+            return prom
+        }
+        return secp256k1.ecdsaVerify(bs58.decode(data.signature), Buffer.from(data.hash, 'hex'), bs58.decode(pubKey))
     },
     sendTransaction: (tx, cb) => {
         // sends a transaction to a node
