@@ -1,12 +1,15 @@
-const CryptoJS = require('crypto-js')
-const eccrypto = require('eccrypto')
-const randomBytes = require('randombytes')
-const secp256k1 = require('secp256k1')
-const bs58 = require('bs58')
-const GrowInt = require('growint')
-const fetch = require('node-fetch')
-const bip39 = require('bip39')
-const bip32 = require('bip32')
+import { encrypt as _encrypt, decrypt as _decrypt } from 'eccrypto'
+import randomBytes from 'randombytes'
+import crypto from 'crypto';
+import pkg from 'secp256k1';
+const { publicKeyCreate, privateKeyVerify, ecdsaSign, ecdsaVerify, publicKeyConvert } = pkg;
+import pkg2 from 'bs58';
+const { encode, decode } = pkg2;
+const fromSeed = import('bip32').fromSeed;
+import GrowInt from 'growint'
+import fetch from 'node-fetch'
+import { generateMnemonic as _generateMnemonic, mnemonicToSeedSync } from 'bip39'
+import { Sha256 } from '@aws-crypto/sha256-browser';
 
 let avalon = {
     config: {
@@ -157,29 +160,29 @@ let avalon = {
         let priv, pub
         do {
             priv = Buffer.from(randomBytes(32).buffer)
-            pub = secp256k1.publicKeyCreate(priv)
-        } while (!secp256k1.privateKeyVerify(priv))
+            pub = publicKeyCreate(priv)
+        } while (!privateKeyVerify(priv))
 
         return {
-            pub: bs58.encode(pub),
-            priv: bs58.encode(priv)
+            pub: encode(pub),
+            priv: encode(priv)
         }
     },
     generateMnemonic: () => {
-        return bip39.generateMnemonic()
+        return _generateMnemonic()
     },
     mnemonicToKeyPair: (mnemonic) => {
-        const seed = bip39.mnemonicToSeedSync(mnemonic)
-        const bip32key = bip32.fromSeed(seed)
+        const seed = mnemonicToSeedSync(mnemonic)
+        const bip32key = fromSeed(seed)
         return {
-            pub: bs58.encode(bip32key.publicKey),
-            priv: bs58.encode(bip32key.privateKey)
+            pub: encode(bip32key.publicKey),
+            priv: encode(bip32key.privateKey)
         }
     },
     privToPub: (priv) => {
-        return bs58.encode(
-            secp256k1.publicKeyCreate(
-                bs58.decode(priv)))
+        return encode(
+            publicKeyCreate(
+                decode(priv)))
     },
     sign: (privKey, sender, tx) => {
         if (typeof tx !== 'object')
@@ -195,10 +198,15 @@ let avalon = {
         // add timestamp to seed the hash (avoid transactions reuse)
         tx.ts = new Date().getTime()
         // hash the transaction
-        tx.hash = CryptoJS.SHA256(JSON.stringify(tx)).toString()
-        // sign the transaction
-        let signature = secp256k1.ecdsaSign(Buffer.from(tx.hash, 'hex'), bs58.decode(privKey))
-        tx.signature = bs58.encode(signature.signature)
+        const hash = new Sha256();
+        hash.update(JSON.stringify(tx));
+        hash.digest().then((digest)  => {
+            tx.hash = "";
+            for (let i=0; i<digest.length; i++) {
+                tx.hash = tx.hash + digest[i].toString(16);
+            }
+            tx.signature = encode(ecdsaSign(Buffer.from(digest, 'hex'), decode(privKey)).signature);
+        });
         return tx
     },
     signData: (privKey, pubKey, data, ts, username = null) => {
@@ -209,12 +217,18 @@ let avalon = {
         // add timestamp to seed the hash (avoid hash reuse)
         r.ts = ts
         // hash the data
-        r.hash = CryptoJS.SHA256(JSON.stringify(r)).toString()
-        // sign the data
-        const signature = secp256k1.ecdsaSign(Buffer.from(r.hash, 'hex'), bs58.decode(privKey))
-        r.signature = bs58.encode(signature.signature)
-        r.pubkey = pubKey
-        return r
+        const hash = new Sha256();
+        hash.update(JSON.stringify(r));
+        hash.digest().then((digest)  => {
+            r.hash = ""
+            for (let i=0; i<digest.length; i++) {
+                r.hash = r.hash + digest[i].toString(16);
+            }
+            // sign the data
+            r.signature = encode(ecdsaSign(Buffer.from(digest, 'hex'), decode(privKey)).signature);
+            r.pubkey = pubKey
+        });
+        return r;
     },
     signMultisig: (privKeys = [], sender, tx) => {
         if (typeof tx !== 'object')
@@ -229,14 +243,22 @@ let avalon = {
             tx.sender = sender
         if (!tx.ts)
             tx.ts = new Date().getTime()
-        if (!tx.hash)
-            tx.hash = CryptoJS.SHA256(JSON.stringify(tx)).toString()
+        if (!tx.hash) {
+            const hash = new Sha256();
+            hash.update(JSON.stringify(tx));
+            hash.digest().then((digest)  => {
+                tx.hash = "";
+                for (let i=0; i<digest.length; i++) {
+                    tx.hash = tx.hash + digest[i].toString(16);
+                }
+            });
+        }
         if (!tx.signature || !Array.isArray(tx.signature))
             tx.signature = []
         
         for (let k in privKeys) {
-            let sign = secp256k1.ecdsaSign(Buffer.from(tx.hash, 'hex'), bs58.decode(privKeys[k]))
-            tx.signature.push([bs58.encode(sign.signature),sign.recid])
+            let sign = ecdsaSign(Buffer.from(tx.hash, 'hex'), decode(privKeys[k]))
+            tx.signature.push([encode(sign.signature),sign.recid])
         }
         return tx
     },
@@ -256,11 +278,19 @@ let avalon = {
                     for (const i in account.keys) {
                         if (pubKey === account.keys[i].pub) {
                             if (ts - maxAge < data.ts) {
-                                if (CryptoJS.SHA256(JSON.stringify(data.data)).toString() !== data.hash) {
-                                    console.log('Hash mismatch!')
-                                    reject(false)
-                                }
-                                if (secp256k1.ecdsaVerify(bs58.decode(data.signature), Buffer.from(data.hash, 'hex'), bs58.decode(pubKey))) return resolve(true)
+                                const hash = new Sha256();
+                                hash.update(JSON.stringify(data.data));
+                                let hashString = "";
+                                hash.digest().then((digest)  => {
+                                    for (let i=0; i<digest.length; i++) {
+                                        hashString = hashString + digest[i].toString(16);
+                                    }
+                                    if (hashString !== data.hash) {
+                                        console.log('Hash mismatch!')
+                                        reject(false)
+                                    }
+                                });
+                                if (ecdsaVerify(decode(data.signature), Buffer.from(data.hash, 'hex'), decode(pubKey))) return resolve(true)
                                 reject(false)
                             }
                             reject(false)
@@ -272,7 +302,7 @@ let avalon = {
             }))
             return prom
         }
-        return secp256k1.ecdsaVerify(bs58.decode(data.signature), Buffer.from(data.hash, 'hex'), bs58.decode(pubKey))
+        return ecdsaVerify(decode(data.signature), Buffer.from(data.hash, 'hex'), decode(pubKey))
     },
     sendTransaction: (tx, cb) => {
         // sends a transaction to a node
@@ -381,19 +411,19 @@ let avalon = {
         }
         try {
             if (ephemPriv)
-                ephemPriv = bs58.decode(ephemPriv)
-            var pubBuffer = bs58.decode(pub)
-            eccrypto.encrypt(pubBuffer, Buffer.from(message), {
+                ephemPriv = decode(ephemPriv)
+            var pubBuffer = decode(pub)
+            _encrypt(pubBuffer, Buffer.from(message), {
                 ephemPrivateKey: ephemPriv
             }).then(function(encrypted) {
                 // reducing the encrypted buffers into base 58
-                encrypted.iv = bs58.encode(encrypted.iv)
+                encrypted.iv = encode(encrypted.iv)
                 // compress the sender's public key to compressed format
                 // shortens the encrypted string length
-                encrypted.ephemPublicKey = secp256k1.publicKeyConvert(encrypted.ephemPublicKey, true)
-                encrypted.ephemPublicKey = bs58.encode(encrypted.ephemPublicKey)
-                encrypted.ciphertext = bs58.encode(encrypted.ciphertext)
-                encrypted.mac = bs58.encode(encrypted.mac)
+                encrypted.ephemPublicKey = publicKeyConvert(encrypted.ephemPublicKey, true)
+                encrypted.ephemPublicKey = encode(encrypted.ephemPublicKey)
+                encrypted.ciphertext = encode(encrypted.ciphertext)
+                encrypted.mac = encode(encrypted.mac)
                 encrypted = [
                     encrypted.iv,
                     encrypted.ephemPublicKey,
@@ -418,15 +448,15 @@ let avalon = {
             
             // then to an object with the correct property names
             var encObj = {}
-            encObj.iv = bs58.decode(encrypted[0])
-            encObj.ephemPublicKey = bs58.decode(encrypted[1])
-            encObj.ephemPublicKey = secp256k1.publicKeyConvert(encObj.ephemPublicKey, false)
-            encObj.ciphertext = bs58.decode(encrypted[2])
-            encObj.mac = bs58.decode(encrypted[3])
+            encObj.iv = decode(encrypted[0])
+            encObj.ephemPublicKey = decode(encrypted[1])
+            encObj.ephemPublicKey = publicKeyConvert(encObj.ephemPublicKey, false)
+            encObj.ciphertext = decode(encrypted[2])
+            encObj.mac = decode(encrypted[3])
 
             // and we decode it with our private key
-            var privBuffer = bs58.decode(priv)
-            eccrypto.decrypt(privBuffer, encObj).then(function(decrypted) {
+            var privBuffer = decode(priv)
+            _decrypt(privBuffer, encObj).then(function(decrypted) {
                 cb(null, decrypted.toString())
             }).catch(function(error) {
                 cb(error)
@@ -504,4 +534,4 @@ let avalon = {
 }
 
 if (typeof window != 'undefined') window.javalon = avalon
-module.exports = avalon
+export default avalon
