@@ -1,6 +1,6 @@
 {
-  "name": "javalon",
-  "version": "1.0.36",
+  "name": "javalon2",
+  "version": "1.0.0",
   "description": "javascript api for the avalon blockchain",
   "main": "index.js",
   "type": "module",
