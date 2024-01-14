@@ -1,9 +1,10 @@
 module.exports = {
     'env': {
-        'commonjs': true,
+        'commonjs': false,
         'es6': true,
         'node': true
     },
+    'sourceType': module,
     'extends': 'eslint:recommended',
     'globals': {
         'Atomics': 'readonly',

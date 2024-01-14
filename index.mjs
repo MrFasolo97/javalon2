@@ -9,7 +9,8 @@ const fromSeed = import('bip32').fromSeed;
 import GrowInt from 'growint'
 import fetch from 'node-fetch'
 import { generateMnemonic as _generateMnemonic, mnemonicToSeedSync } from 'bip39'
-import { Sha256 } from '@aws-crypto/sha256-browser';
+import pkg3 from 'js-sha3';
+const { sha3_256 } = pkg3;
 
 let avalon = {
     config: {
@@ -198,10 +199,8 @@ let avalon = {
         // add timestamp to seed the hash (avoid transactions reuse)
         tx.ts = new Date().getTime()
         // hash the transaction
-        tx.hash = crypto.createHash("SHA256", JSON.stringify(tx)).toString()
-        // sign the transaction
-        let signature = ecdsaSign(Buffer.from(tx.hash, 'hex'), decode(privKey))
-        tx.signature = encode(signature.signature)
+        tx.hash = sha3_256(JSON.stringify(tx));
+        tx.signature = encode(ecdsaSign(Buffer.from(tx.hash, 'hex'), decode(privKey)).signature);
         return tx
     },
     signData: (privKey, pubKey, data, ts, username = null) => {
@@ -212,17 +211,10 @@ let avalon = {
         // add timestamp to seed the hash (avoid hash reuse)
         r.ts = ts
         // hash the data
-        const hash = new Sha256();
-        hash.update(JSON.stringify(r));
-            r.hash = ""
-            hash.digest().then((digest)  => {
-            for (let i=0; i<digest.length; i++) {
-                r.hash = r.hash + digest[i].toString(16);
-            }
-            // sign the data
-            r.signature = ecdsaSign(Buffer.from(digest, 'hex'), decode(privKey));
-            r.pubkey = pubKey
-        });
+        r.hash = sha3_256(JSON.stringify(r));
+        // sign the data
+        r.signature = encode(ecdsaSign(Buffer.from(r.hash, 'hex'), decode(privKey)).signature);
+        r.pubKey = pubKey
         return r;
     },
     signMultisig: (privKeys = [], sender, tx) => {
