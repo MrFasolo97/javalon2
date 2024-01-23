@@ -1,4 +1,4 @@
-import { encrypt as _encrypt, decrypt as _decrypt } from 'eccrypto'
+import { encrypt as _encrypt, decrypt as _decrypt, sign } from 'eccrypto'
 import randomBytes from 'randombytes'
 import crypto from 'crypto';
 import pkg from 'secp256k1';
@@ -9,7 +9,8 @@ const fromSeed = import('bip32').fromSeed;
 import GrowInt from 'growint'
 import fetch from 'node-fetch'
 import { generateMnemonic as _generateMnemonic, mnemonicToSeedSync } from 'bip39'
-import { Sha256 } from '@aws-crypto/sha256-browser';
+import pkg3 from 'js-sha3';
+const { sha3_256 } = pkg3;
 
 let avalon = {
     config: {
@@ -198,15 +199,8 @@ let avalon = {
         // add timestamp to seed the hash (avoid transactions reuse)
         tx.ts = new Date().getTime()
         // hash the transaction
-        const hash = new Sha256();
-        hash.update(JSON.stringify(tx));
-        hash.digest().then((digest)  => {
-            tx.hash = "";
-            for (let i=0; i<digest.length; i++) {
-                tx.hash = tx.hash + digest[i].toString(16);
-            }
-            tx.signature = encode(ecdsaSign(Buffer.from(digest, 'hex'), decode(privKey)).signature);
-        });
+        tx.hash = sha3_256(JSON.stringify(tx));
+        tx.signature = encode(ecdsaSign(Buffer.from(tx.hash, 'hex'), decode(privKey)).signature);
         return tx
     },
     signData: (privKey, pubKey, data, ts, username = null) => {
@@ -217,17 +211,10 @@ let avalon = {
         // add timestamp to seed the hash (avoid hash reuse)
         r.ts = ts
         // hash the data
-        const hash = new Sha256();
-        hash.update(JSON.stringify(r));
-        hash.digest().then((digest)  => {
-            r.hash = ""
-            for (let i=0; i<digest.length; i++) {
-                r.hash = r.hash + digest[i].toString(16);
-            }
-            // sign the data
-            r.signature = encode(ecdsaSign(Buffer.from(digest, 'hex'), decode(privKey)).signature);
-            r.pubkey = pubKey
-        });
+        r.hash = sha3_256(JSON.stringify(r));
+        // sign the data
+        r.signature = encode(ecdsaSign(Buffer.from(r.hash, 'hex'), decode(privKey)).signature);
+        r.pubKey = pubKey
         return r;
     },
     signMultisig: (privKeys = [], sender, tx) => {
@@ -243,16 +230,8 @@ let avalon = {
             tx.sender = sender
         if (!tx.ts)
             tx.ts = new Date().getTime()
-        if (!tx.hash) {
-            const hash = new Sha256();
-            hash.update(JSON.stringify(tx));
-            hash.digest().then((digest)  => {
-                tx.hash = "";
-                for (let i=0; i<digest.length; i++) {
-                    tx.hash = tx.hash + digest[i].toString(16);
-                }
-            });
-        }
+        if (!tx.hash)
+            tx.hash = createHash("SHA256", JSON.stringify(tx)).toString()
         if (!tx.signature || !Array.isArray(tx.signature))
             tx.signature = []
         
@@ -278,18 +257,10 @@ let avalon = {
                     for (const i in account.keys) {
                         if (pubKey === account.keys[i].pub) {
                             if (ts - maxAge < data.ts) {
-                                const hash = new Sha256();
-                                hash.update(JSON.stringify(data.data));
-                                let hashString = "";
-                                hash.digest().then((digest)  => {
-                                    for (let i=0; i<digest.length; i++) {
-                                        hashString = hashString + digest[i].toString(16);
-                                    }
-                                    if (hashString !== data.hash) {
-                                        console.log('Hash mismatch!')
-                                        reject(false)
-                                    }
-                                });
+                                if (crypto.createHash("SHA256").update(JSON.stringify(data.data)).digest() !== data.hash) {
+                                    console.log('Hash mismatch!')
+                                    reject(false)
+                                }
                                 if (ecdsaVerify(decode(data.signature), Buffer.from(data.hash, 'hex'), decode(pubKey))) return resolve(true)
                                 reject(false)
                             }
