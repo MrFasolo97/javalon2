@@ -231,7 +231,7 @@ let avalon = {
         if (!tx.ts)
             tx.ts = new Date().getTime()
         if (!tx.hash)
-            tx.hash = createHash("SHA256", JSON.stringify(tx)).toString()
+            tx.hash = sha3_256(JSON.stringify(tx))
         if (!tx.signature || !Array.isArray(tx.signature))
             tx.signature = []
         
@@ -257,7 +257,7 @@ let avalon = {
                     for (const i in account.keys) {
                         if (pubKey === account.keys[i].pub) {
                             if (ts - maxAge < data.ts) {
-                                if (crypto.createHash("SHA256").update(JSON.stringify(data.data)).digest() !== data.hash) {
+                                if (sha3_256(JSON.stringify(data.data)).hash !== data.hash) {
                                     console.log('Hash mismatch!')
                                     reject(false)
                                 }
