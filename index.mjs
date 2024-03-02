@@ -280,7 +280,7 @@ let avalon = {
         // 200 with head block number if confirmed
         // 408 if timeout
         // 500 with error if transaction is invalid
-        fetch(avalon.randomNode()+'/transactWaitConfirm', {
+        fetch(avalon.randomNode()+'/transact', {
             method: 'post',
             headers: {
                 'Accept': 'application/json, text/plain, */*',
