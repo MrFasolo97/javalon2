@@ -1,12 +1,12 @@
 {
   "name": "javalon2",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "javascript api for the avalon blockchain",
-  "main": "index.js",
+  "main": "index.mjs",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\"",
-    "build": "browserify -e index.js -p tinyify -o bin/javalon.min.js"
+    "build": "browserify -e index.mjs -p tinyify -o bin/javalon.min.js"
   },
   "keywords": [
     "avalon",
@@ -18,8 +18,12 @@
   "author": "Adrien M",
   "license": "MIT",
   "devDependencies": {
+    "@babel/core": "^7.23.7",
+    "@babel/preset-env": "^7.23.8",
+    "babelify": "^10.0.0",
     "browserify": "^16.5.0",
-    "eslint": "^5.16.0"
+    "eslint": "^5.16.0",
+    "tinyify": "^4.0.0"
   },
   "dependencies": {
     "@aws-crypto/sha256-browser": "^5.2.0",
@@ -35,10 +39,22 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/skzap/javalon.git"
+    "url": "git+https://github.com/MrFasolo97/javalon2.git"
   },
   "bugs": {
-    "url": "https://github.com/skzap/javalon/issues"
+    "url": "https://github.com/MrFasolo97/javalon2/issues"
   },
-  "homepage": "https://github.com/skzap/javalon#readme"
+  "homepage": "https://github.com/MrFasolo97/javalon2#readme",
+  "browserify": {
+    "transform": [
+      [
+        "babelify",
+        {
+          "presets": [
+            "@babel/preset-env"
+          ]
+        }
+      ]
+    ]
+  }
 }
