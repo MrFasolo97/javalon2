@@ -9,8 +9,7 @@ const fromSeed = import('bip32').fromSeed;
 import GrowInt from 'growint'
 import fetch from 'node-fetch'
 import { generateMnemonic as _generateMnemonic, mnemonicToSeedSync } from 'bip39'
-import pkg3 from 'js-sha3';
-const { sha3_256 } = pkg3;
+import { sha256 } from 'js-sha256';
 
 let avalon = {
     config: {
@@ -199,7 +198,7 @@ let avalon = {
         // add timestamp to seed the hash (avoid transactions reuse)
         tx.ts = new Date().getTime()
         // hash the transaction
-        tx.hash = sha3_256(JSON.stringify(tx));
+        tx.hash = sha256(JSON.stringify(tx));
         tx.signature = encode(ecdsaSign(Buffer.from(tx.hash, 'hex'), decode(privKey)).signature);
         return tx
     },
@@ -211,7 +210,7 @@ let avalon = {
         // add timestamp to seed the hash (avoid hash reuse)
         r.ts = ts
         // hash the data
-        r.hash = sha3_256(JSON.stringify(r));
+        r.hash = sha256(JSON.stringify(r));
         // sign the data
         r.signature = encode(ecdsaSign(Buffer.from(r.hash, 'hex'), decode(privKey)).signature);
         r.pubKey = pubKey
