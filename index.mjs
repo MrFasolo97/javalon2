@@ -13,7 +13,7 @@ import { sha256 } from 'js-sha256';
 
 let avalon = {
     config: {
-        api: ['https://avalon.d.tube'],
+        api: ['https://api.avalonblocks.com'],
         bwGrowth: 10000000,
         vtGrowth: 360000000
     },
