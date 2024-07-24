@@ -202,7 +202,9 @@ let avalon = {
             if (method.startsWith("/trending") || method.startsWith("/hot") || method.startsWith("/new") || method.startsWith("/feed")) {
                 let newFeed = []
                 for (let item in res) {
-                    newFeed.push(await avalon.filterByDMCA(res[item]))
+                    let newItem = await avalon.filterByDMCA(res[item])
+                    if (typeof newItem !== 'undefined')
+                        newFeed.push(await avalon.filterByDMCA(res[item]))
                 }
                 cb(newFeed)
             } else {
