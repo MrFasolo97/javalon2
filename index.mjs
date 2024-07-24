@@ -16,7 +16,7 @@ let avalon = {
         api: ['https://api.avalonblocks.com'],
         bwGrowth: 10000000,
         vtGrowth: 360000000,
-        dmcaUrl: 'https://dmca.dtube.fso.ovh/v/' ,
+        dmcaUrl: 'https://dmca.dtube.fso.ovh/v/',
         dmcaAuthors: [],
         dmcaContents: [],
         dmcaAllowedContents: [],
@@ -30,40 +30,43 @@ let avalon = {
         } else if (avalon.config.dmcaContents.indexOf(item.author+"/"+item.link) !== -1) {
             return true;
         } else {
-            if (avalom.config.dmcaAllowedContents.indexOf(item.author+"/"+item.link) !== -1)
+            if (avalon.config.dmcaAllowedContents.indexOf(item.author+"/"+item.link) !== -1)
                 return false;
             else
                 return null;
         }
     },
-    filterByDMCA (feed) {
-        let newFeed = [];
-        for (let item in feed) {
-            let dmcaCheck = DMCACache(feed[item]);
-            if (dmcaCheck == null) {
-                fetch(avalon.config.dmcaUrl+feed[item].author+"/"+feed[item].link, {
-                    method: 'get',
-                    headers: {
-                        'Accept': 'application/json, text/plain, */*',
-                        'Content-Type': 'application/json'
+    async filterByDMCA (feedItem) {
+        let dmcaCheck = avalon.DMCACache(feedItem);
+        console.log(feedItem.author + " " + dmcaCheck);
+        let newFeedItem;
+        if (dmcaCheck == null) {
+            console.log("Checking "+feedItem.author+"/"+feedItem.link)
+            await fetch(avalon.config.dmcaUrl+feedItem.author+"/"+feedItem.link, {
+                method: 'get',
+                headers: {
+                    'Accept': 'application/json, text/plain, */*',
+                    'Content-Type': 'application/json'
+                }
+            }).then(async (result) => {
+                await result.json().then((dmca) => {
+                    if (dmca.dmca == 0) {
+                        avalon.config.dmcaAllowedContents.push(feedItem.author+"/"+feedItem.link)
+                        newFeedItem = feedItem
+                    } else if (dmca.dmca == 1) {
+                        avalon.config.dmcaContents.push(feedItem.author+"/"+feedItem.link)
+                    } else if (dmca.dmca == 2) {
+                        avalon.config.dmcaAuthors.push(feedItem.author)
                     }
-                }).then(res => res.json()).then((result) => {
-                    if (result.dmca == 0) {
-                        newFeed.append(feed[item])
-                        avalon.config.dmcaAllowedContents.append(feed[item].author+"/"+feed[item].link)
-                    } else if (result.dmca == 1) {
-                        avalon.config.dmcaContents.append(feed[item].author+"/"+feed[item].link)
-                    } else if (result.dmca == 2) {
-                        avalon.config.dmcaAuthors.append(feed[item].author)
-                    }
-                }).catch((err) => {
-                    newFeed.append(feed[item])
-                })
-            } else if (dmcaCheck == false) {
-                newFeed.append(feed[item])
-            }
+                });
+            }).catch((err) => {
+                console.log(err)
+                newFeedItem = feedItem
+            })
+        } else if (dmcaCheck == false) {
+            return feedItem
         }
-        return newFeed
+        return newFeedItem
     },
     getBlockchainHeight: (cb) => {
         avalon.get('/count',cb)
@@ -148,21 +151,21 @@ let avalon = {
     },
     getNewDiscussions: (author, link, cb) => {
         if (!author && !link)
-            filterByDMCA(avalon.get('/new',cb))
+            avalon.get('/new',cb)
         else
-            filterByDMCA(avalon.get('/new/'+author+'/'+link,cb))
+            avalon.get('/new/'+author+'/'+link,cb)
     },
     getHotDiscussions: (author, link, cb) => {
         if (!author && !link)
-            filterByDMCA(avalon.get('/hot',cb))
+            avalon.get('/hot',cb)
         else
-            filterByDMCA(avalon.get('/hot/'+author+'/'+link,cb))
+            avalon.get('/hot/'+author+'/'+link,cb)
     },
     getTrendingDiscussions: (author, link, cb) => {
         if (!author && !link) 
-            filterByDMCA(avalon.get('/trending',cb))
+            avalon.get('/trending',cb)
         else
-            filterByDMCA(avalon.get('/trending/'+author+'/'+link,cb))
+            avalon.get('/trending/'+author+'/'+link,cb)
     },
     getFeedDiscussions: (username, author, link, cb) => {
         if (!author && !link)
@@ -195,8 +198,16 @@ let avalon = {
                 'Accept': 'application/json, text/plain, */*',
                 'Content-Type': 'application/json'
             }
-        }).then(res => res.json()).then(function(res) {
-            cb(null, res)
+        }).then(res => res.json()).then(async (res) => {
+            if (method.startsWith("/trending") || method.startsWith("/hot") || method.startsWith("/new") || method.startsWith("/feed")) {
+                let newFeed = []
+                for (let item in res) {
+                    newFeed.push(await avalon.filterByDMCA(res[item]))
+                }
+                cb(newFeed)
+            } else {
+                cb(res)
+            }
         }).catch(function(error) {
             cb(error)
         })
