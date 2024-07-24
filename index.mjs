@@ -36,20 +36,20 @@ let avalon = {
                 return null;
         }
     },
-    async filterByDMCA (feedItem) {
+    filterByDMCA (feedItem) {
         let dmcaCheck = avalon.DMCACache(feedItem);
         console.log(feedItem.author + " " + dmcaCheck);
         let newFeedItem;
         if (dmcaCheck == null) {
             console.log("Checking "+feedItem.author+"/"+feedItem.link)
-            await fetch(avalon.config.dmcaUrl+feedItem.author+"/"+feedItem.link, {
+            fetch(avalon.config.dmcaUrl+feedItem.author+"/"+feedItem.link, {
                 method: 'get',
                 headers: {
                     'Accept': 'application/json, text/plain, */*',
                     'Content-Type': 'application/json'
                 }
-            }).then(async (result) => {
-                await result.json().then((dmca) => {
+            }).then((result) => {
+                result.json().then((dmca) => {
                     if (dmca.dmca == 0) {
                         avalon.config.dmcaAllowedContents.push(feedItem.author+"/"+feedItem.link)
                         newFeedItem = feedItem
@@ -202,13 +202,11 @@ let avalon = {
             if (method.startsWith("/trending") || method.startsWith("/hot") || method.startsWith("/new") || method.startsWith("/feed")) {
                 let newFeed = []
                 for (let item in res) {
-                    let newItem = await avalon.filterByDMCA(res[item])
-                    if (typeof newItem !== 'undefined')
-                        newFeed.push(await avalon.filterByDMCA(res[item]))
+                    newFeed.push(await avalon.filterByDMCA(res[item]))
                 }
-                cb(newFeed)
+                cb(null, newFeed)
             } else {
-                cb(res)
+                cb(null, res)
             }
         }).catch(function(error) {
             cb(error)
