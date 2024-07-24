@@ -15,10 +15,55 @@ let avalon = {
     config: {
         api: ['https://api.avalonblocks.com'],
         bwGrowth: 10000000,
-        vtGrowth: 360000000
+        vtGrowth: 360000000,
+        dmcaUrl: 'https://dmca.dtube.fso.ovh/v/' ,
+        dmcaAuthors: [],
+        dmcaContents: [],
+        dmcaAllowedContents: [],
     },
     init: (config) => {
         avalon.config = Object.assign(avalon.config,config)
+    },
+    DMCACache(item) {
+        if (avalon.config.dmcaAuthors.indexOf(item.author) !== -1) {
+            return true;
+        } else if (avalon.config.dmcaContents.indexOf(item.author+"/"+item.link) !== -1) {
+            return true;
+        } else {
+            if (avalom.config.dmcaAllowedContents.indexOf(item.author+"/"+item.link) !== -1)
+                return false;
+            else
+                return null;
+        }
+    },
+    filterByDMCA (feed) {
+        let newFeed = [];
+        for (let item in feed) {
+            let dmcaCheck = DMCACache(feed[item]);
+            if (dmcaCheck == null) {
+                fetch(avalon.config.dmcaUrl+feed[item].author+"/"+feed[item].link, {
+                    method: 'get',
+                    headers: {
+                        'Accept': 'application/json, text/plain, */*',
+                        'Content-Type': 'application/json'
+                    }
+                }).then(res => res.json()).then(result => result {
+                    if (result.dmca == 0) {
+                        newFeed.append(feed[item])
+                        avalon.config.dmcaAllowedContents.append(feed[item].author+"/"+feed[item].link)
+                    } else if (result.dmca == 1) {
+                        avalon.config.dmcaContents.append(feed[item].author+"/"+feed[item].link)
+                    } else if (result.dmca == 2) {
+                        avalon.config.dmcaAuthors.append(feed[item].author)
+                    }
+                }).catch((err) => {
+                    newFeed.append(feed[item])
+                })
+            } else if (dmcaCheck == false) {
+                newFeed.append(feed[item])
+            }
+        }
+        return newFeed
     },
     getBlockchainHeight: (cb) => {
         avalon.get('/count',cb)
@@ -103,21 +148,21 @@ let avalon = {
     },
     getNewDiscussions: (author, link, cb) => {
         if (!author && !link)
-            avalon.get('/new',cb)
+            filterByDMCA(avalon.get('/new',cb))
         else
-            avalon.get('/new/'+author+'/'+link,cb)
+            filterByDMCA(avalon.get('/new/'+author+'/'+link,cb))
     },
     getHotDiscussions: (author, link, cb) => {
         if (!author && !link)
-            avalon.get('/hot',cb)
+            filterByDMCA(avalon.get('/hot',cb))
         else
-            avalon.get('/hot/'+author+'/'+link,cb)
+            filterByDMCA(avalon.get('/hot/'+author+'/'+link,cb))
     },
     getTrendingDiscussions: (author, link, cb) => {
         if (!author && !link) 
-            avalon.get('/trending',cb)
-        else 
-            avalon.get('/trending/'+author+'/'+link,cb)
+            filterByDMCA(avalon.get('/trending',cb))
+        else
+            filterByDMCA(avalon.get('/trending/'+author+'/'+link,cb))
     },
     getFeedDiscussions: (username, author, link, cb) => {
         if (!author && !link)
