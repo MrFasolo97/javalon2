@@ -47,7 +47,7 @@ let avalon = {
                         'Accept': 'application/json, text/plain, */*',
                         'Content-Type': 'application/json'
                     }
-                }).then(res => res.json()).then(result => result {
+                }).then(res => res.json()).then((result) => {
                     if (result.dmca == 0) {
                         newFeed.append(feed[item])
                         avalon.config.dmcaAllowedContents.append(feed[item].author+"/"+feed[item].link)
