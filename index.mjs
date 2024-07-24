@@ -38,10 +38,8 @@ let avalon = {
     },
     filterByDMCA (feedItem) {
         let dmcaCheck = avalon.DMCACache(feedItem);
-        console.log(feedItem.author + " " + dmcaCheck);
         let newFeedItem;
         if (dmcaCheck == null) {
-            console.log("Checking "+feedItem.author+"/"+feedItem.link)
             fetch(avalon.config.dmcaUrl+feedItem.author+"/"+feedItem.link, {
                 method: 'get',
                 headers: {
