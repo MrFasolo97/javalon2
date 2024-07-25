@@ -17,54 +17,13 @@ let avalon = {
         bwGrowth: 10000000,
         vtGrowth: 360000000,
         dmcaUrl: 'https://dmca.dtube.fso.ovh/v/',
+        dmcaFeedUrl: 'https://dmca.dtube.fso.ovh/feed',
         dmcaAuthors: [],
         dmcaContents: [],
         dmcaAllowedContents: [],
     },
     init: (config) => {
         avalon.config = Object.assign(avalon.config,config)
-    },
-    DMCACache(item) {
-        if (avalon.config.dmcaAuthors.indexOf(item.author) !== -1) {
-            return true;
-        } else if (avalon.config.dmcaContents.indexOf(item.author+"/"+item.link) !== -1) {
-            return true;
-        } else {
-            if (avalon.config.dmcaAllowedContents.indexOf(item.author+"/"+item.link) !== -1)
-                return false;
-            else
-                return null;
-        }
-    },
-    filterByDMCA (feedItem) {
-        let dmcaCheck = avalon.DMCACache(feedItem);
-        let newFeedItem;
-        if (dmcaCheck == null) {
-            fetch(avalon.config.dmcaUrl+feedItem.author+"/"+feedItem.link, {
-                method: 'get',
-                headers: {
-                    'Accept': 'application/json, text/plain, */*',
-                    'Content-Type': 'application/json'
-                }
-            }).then((result) => {
-                result.json().then((dmca) => {
-                    if (dmca.dmca == 0) {
-                        avalon.config.dmcaAllowedContents.push(feedItem.author+"/"+feedItem.link)
-                        newFeedItem = feedItem
-                    } else if (dmca.dmca == 1) {
-                        avalon.config.dmcaContents.push(feedItem.author+"/"+feedItem.link)
-                    } else if (dmca.dmca == 2) {
-                        avalon.config.dmcaAuthors.push(feedItem.author)
-                    }
-                });
-            }).catch((err) => {
-                console.log(err)
-                newFeedItem = feedItem
-            })
-        } else if (dmcaCheck == false) {
-            return feedItem
-        }
-        return newFeedItem
     },
     getBlockchainHeight: (cb) => {
         avalon.get('/count',cb)
@@ -196,13 +155,21 @@ let avalon = {
                 'Accept': 'application/json, text/plain, */*',
                 'Content-Type': 'application/json'
             }
-        }).then(res => res.json()).then(async (res) => {
+        }).then((res) => res.json()).then((res) => {
             if (method.startsWith("/trending") || method.startsWith("/hot") || method.startsWith("/new") || method.startsWith("/feed")) {
-                let newFeed = []
-                for (let item in res) {
-                    newFeed.push(await avalon.filterByDMCA(res[item]))
-                }
-                cb(null, newFeed)
+                fetch(avalon.config.dmcaFeedUrl, {
+                    method: "POST",
+                    headers: {
+                        'Accept': 'application/json, text/plain, */*',
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(res),
+                }).then((newFeed) => {
+                    newFeed.json().then((value) => cb(null, value))
+                }).catch((err) => {
+                    console.log(err)
+                    cb(err)
+                })
             } else {
                 cb(null, res)
             }
