@@ -2,9 +2,9 @@ module.exports = {
     'env': {
         'commonjs': false,
         'es6': true,
-        'node': true
+        'node': true,
+        'browser': true
     },
-    'sourceType': module,
     'extends': 'eslint:recommended',
     'globals': {
         'Atomics': 'readonly',
@@ -23,8 +23,14 @@ module.exports = {
         'newRankings': 'writable',
         'window': 'writable'
     },
+    "parser": "babel-eslint",
     'parserOptions': {
-        'ecmaVersion': 2018
+        'ecmaVersion': 2022,
+        "sourceType": "module",
+        "allowImportExportEverywhere": true,
+        "ecmaFeatures": {
+            "jsx": true
+        }
     },
     'rules': {
         'indent': [
