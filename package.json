@@ -1,12 +1,13 @@
 {
   "name": "javalon2",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "javascript api for the avalon blockchain",
   "main": "index.mjs",
   "type": "module",
+  "sourceType": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\"",
-    "build": "browserify -e index.mjs -p tinyify -o bin/javalon.min.js"
+    "build": "browserify index.mjs -p tinyify -o bin/javalon.min.js -t babelify"
   },
   "keywords": [
     "avalon",
@@ -18,24 +19,30 @@
   "author": "Adrien M",
   "license": "MIT",
   "devDependencies": {
-    "@babel/core": "^7.23.7",
-    "@babel/preset-env": "^7.23.8",
+    "@babel/core": "^7.25.8",
+    "@babel/preset-env": "^7.25.8",
+    "babel-preset-env": "^1.7.0",
+    "babel-preset-es2015": "^6.24.1",
+    "babel-preset-stage-0": "^6.24.1",
     "babelify": "^10.0.0",
-    "browserify": "^16.5.0",
+    "browserify": "^16.5.2",
+    "crypto-browserify": "^3.12.0",
     "eslint": "^5.16.0",
-    "tinyify": "^4.0.0"
+    "tinyify": "^4.0.0",
+    "webpack": "^5.95.0",
+    "webpack-cli": "^5.1.4"
   },
   "dependencies": {
     "@aws-crypto/sha256-browser": "^5.2.0",
-    "bip32": "^2.0.6",
+    "bip32": "^4.0.0",
     "bip39": "^3.1.0",
-    "bs58": "^4.0.1",
+    "bs58": "^6.0.0",
     "eccrypto": "^1.1.1",
     "growint": "^1.0.1",
     "js-sha256": "^0.11.0",
-    "node-fetch": "^2.6.0",
+    "node-fetch": "^2.7.0",
     "randombytes": "^2.1.0",
-    "secp256k1": "^4.0.2"
+    "secp256k1": "^5.0.0"
   },
   "repository": {
     "type": "git",
@@ -44,17 +51,5 @@
   "bugs": {
     "url": "https://github.com/MrFasolo97/javalon2/issues"
   },
-  "homepage": "https://github.com/MrFasolo97/javalon2#readme",
-  "browserify": {
-    "transform": [
-      [
-        "babelify",
-        {
-          "presets": [
-            "@babel/preset-env"
-          ]
-        }
-      ]
-    ]
-  }
+  "homepage": "https://github.com/MrFasolo97/javalon2#readme"
 }
