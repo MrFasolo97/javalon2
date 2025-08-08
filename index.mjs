@@ -1,7 +1,6 @@
 import { decrypt as _decrypt, encrypt as _encrypt } from "eciesjs";
 import { sign } from "@noble/secp256k1";
 import randomBytes from 'randombytes';
-import crypto from 'crypto';
 import pkg from 'secp256k1';
 const { publicKeyCreate, privateKeyVerify, ecdsaSign, ecdsaVerify } = pkg;
 import pkg2 from 'bs58';
@@ -11,7 +10,6 @@ import GrowInt from 'growint'
 import fetch from 'node-fetch'
 import { generateMnemonic as _generateMnemonic, mnemonicToSeedSync } from 'bip39'
 import { sha256 } from 'js-sha256';
-import * as ECIES from "eciesjs";
 
 function generateEphemeralPrivate() {
   for (let i = 0; i < 10; i++) {
