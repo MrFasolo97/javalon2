@@ -1,8 +1,9 @@
-import { encrypt as _encrypt, decrypt as _decrypt, sign } from 'eccrypto'
-import randomBytes from 'randombytes'
+import { decrypt as _decrypt, encrypt as _encrypt } from "eciesjs";
+import { sign } from "@noble/secp256k1";
+import randomBytes from 'randombytes';
 import crypto from 'crypto';
 import pkg from 'secp256k1';
-const { publicKeyCreate, privateKeyVerify, ecdsaSign, ecdsaVerify, publicKeyConvert } = pkg;
+const { publicKeyCreate, privateKeyVerify, ecdsaSign, ecdsaVerify } = pkg;
 import pkg2 from 'bs58';
 const { encode, decode } = pkg2;
 const fromSeed = import('bip32').fromSeed;
@@ -10,6 +11,21 @@ import GrowInt from 'growint'
 import fetch from 'node-fetch'
 import { generateMnemonic as _generateMnemonic, mnemonicToSeedSync } from 'bip39'
 import { sha256 } from 'js-sha256';
+import * as ECIES from "eciesjs";
+
+function generateEphemeralPrivate() {
+  for (let i = 0; i < 10; i++) {
+    const priv = crypto.randomBytes(32);
+    try {
+      const e = crypto.createECDH('secp256k1');
+      e.setPrivateKey(priv); // will throw if invalid
+      return priv;
+    } catch (err) {
+      // try again
+    }
+  }
+  throw new Error('Failed to generate valid ephemeral private key');
+}
 
 let avalon = {
     config: {
@@ -220,7 +236,7 @@ let avalon = {
         tx.ts = new Date().getTime()
         // hash the transaction
         tx.hash = sha256(JSON.stringify(tx));
-        tx.signature = encode(ecdsaSign(Buffer.from(tx.hash, 'hex'), decode(privKey)).signature);
+        tx.signature = encode(sign(Buffer.from(tx.hash, 'hex'), decode(privKey)).signature);
         return tx
     },
     signData: (privKey, pubKey, data, ts, username = null) => {
@@ -394,66 +410,100 @@ let avalon = {
 
         })
     },
-    encrypt: (pub, message, ephemPriv, cb) => {
-        // if no ephemPriv is passed, a new random key is generated
-        if (!cb) {
-            cb = ephemPriv
-            ephemPriv = avalon.keypair().priv
-        }
+    encrypt(pub, message, ephemPriv, cb) {
         try {
-            if (ephemPriv)
-                ephemPriv = decode(ephemPriv)
-            var pubBuffer = decode(pub)
-            _encrypt(pubBuffer, Buffer.from(message), {
-                ephemPrivateKey: ephemPriv
-            }).then(function(encrypted) {
-                // reducing the encrypted buffers into base 58
-                encrypted.iv = encode(encrypted.iv)
-                // compress the sender's public key to compressed format
-                // shortens the encrypted string length
-                encrypted.ephemPublicKey = publicKeyConvert(encrypted.ephemPublicKey, true)
-                encrypted.ephemPublicKey = encode(encrypted.ephemPublicKey)
-                encrypted.ciphertext = encode(encrypted.ciphertext)
-                encrypted.mac = encode(encrypted.mac)
-                encrypted = [
-                    encrypted.iv,
-                    encrypted.ephemPublicKey,
-                    encrypted.ciphertext,
-                    encrypted.mac
-                ]
-                
-                // adding the _ separator character
-                encrypted = encrypted.join('_')
-                cb(null, encrypted)
-            }).catch(function(error) {
-                cb(error)
-            })
-        } catch (error) {
-            cb(error)
+            // support calling encrypt(pub, message, cb)
+            if (typeof cb !== 'function') {
+            cb = ephemPriv;
+            ephemPriv = null;
+            }
+
+            const pubBuf = Buffer.isBuffer(pub) ? pub : decode(pub);
+
+            // ephemPriv may be Base58 string or Buffer; if omitted generate one
+            let ephemPrivBuf;
+            if (ephemPriv) {
+            ephemPrivBuf = Buffer.isBuffer(ephemPriv) ? ephemPriv : decode(ephemPriv);
+            } else {
+            ephemPrivBuf = generateEphemeralPrivate();
+            }
+
+            // Setup ECDH with ephemeral private key
+            const ecdh = crypto.createECDH('secp256k1');
+            ecdh.setPrivateKey(ephemPrivBuf);
+
+            // Compute shared secret
+            let shared = ecdh.computeSecret(pubBuf); // Buffer
+            // some libraries return 65-byte uncompressed; normalize by stripping leading 0x04
+            if (shared.length === 65 && shared[0] === 0x04) shared = shared.slice(1);
+
+            // KDF: SHA-512 -> AES key (first 32), MAC key (last 32)
+            const hash = crypto.createHash('sha512').update(shared).digest();
+            const aesKey = hash.slice(0, 32);
+            const macKey = hash.slice(32);
+
+            // AES-256-CBC with random IV
+            const iv = crypto.randomBytes(16);
+            const cipher = crypto.createCipheriv('aes-256-cbc', aesKey, iv);
+            const ciphertext = Buffer.concat([cipher.update(Buffer.from(message)), cipher.final()]);
+
+            // Get compressed ephemeral public key (33 bytes)
+            const ephemPub = ecdh.getPublicKey(undefined, 'compressed');
+
+            // MAC over (iv || ephemPub || ciphertext)
+            const dataToMac = Buffer.concat([iv, ephemPub, ciphertext]);
+            const mac = crypto.createHmac('sha256', macKey).update(dataToMac).digest();
+
+            // Encode each part in Base58 and join with '_'
+            const parts = [
+            encode(iv),
+            encode(ephemPub),
+            encode(ciphertext),
+            encode(mac)
+            ];
+            const output = parts.join('_');
+            cb(null, output);
+        } catch (err) {
+            cb(err);
         }
     },
-    decrypt: (priv, encrypted, cb) => {
+    decrypt(priv, encryptedStr, cb) {
         try {
-            // converting the encrypted string to an array of base58 encoded strings
-            encrypted = encrypted.split('_')
-            
-            // then to an object with the correct property names
-            var encObj = {}
-            encObj.iv = decode(encrypted[0])
-            encObj.ephemPublicKey = decode(encrypted[1])
-            encObj.ephemPublicKey = publicKeyConvert(encObj.ephemPublicKey, false)
-            encObj.ciphertext = decode(encrypted[2])
-            encObj.mac = decode(encrypted[3])
+            const privBuf = Buffer.isBuffer(priv) ? priv : decode(priv);
 
-            // and we decode it with our private key
-            var privBuffer = decode(priv)
-            _decrypt(privBuffer, encObj).then(function(decrypted) {
-                cb(null, decrypted.toString())
-            }).catch(function(error) {
-                cb(error)
-            })
-        } catch (error) {
-            cb(error)
+            const parts = encryptedStr.split('_');
+            if (parts.length !== 4) return cb(new Error('Malformed encrypted payload'));
+
+            const iv = decode(parts[0]);
+            const ephemPub = decode(parts[1]);
+            const ciphertext = decode(parts[2]);
+            const mac = decode(parts[3]);
+
+            // ECDH using recipient private key
+            const ecdh = crypto.createECDH('secp256k1');
+            ecdh.setPrivateKey(privBuf);
+
+            let shared = ecdh.computeSecret(ephemPub);
+            if (shared.length === 65 && shared[0] === 0x04) shared = shared.slice(1);
+
+            const hash = crypto.createHash('sha512').update(shared).digest();
+            const aesKey = hash.slice(0, 32);
+            const macKey = hash.slice(32);
+
+            // Verify MAC
+            const dataToMac = Buffer.concat([iv, ephemPub, ciphertext]);
+            const expectedMac = crypto.createHmac('sha256', macKey).update(dataToMac).digest();
+            if (!crypto.timingSafeEqual(expectedMac, mac)) {
+            return cb(new Error('MAC mismatch - data corrupted or wrong key'));
+            }
+
+            // Decrypt AES-256-CBC
+            const decipher = crypto.createDecipheriv('aes-256-cbc', aesKey, iv);
+            const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+
+            cb(null, plaintext.toString());
+        } catch (err) {
+            cb(err);
         }
     },
     randomNode: () => {
