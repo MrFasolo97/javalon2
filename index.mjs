@@ -1,8 +1,8 @@
-import { decrypt as _decrypt, encrypt as _encrypt } from "eciesjs";
-import { sign } from "@noble/secp256k1";
-import randomBytes from 'randombytes';
+import { encrypt as _encrypt, decrypt as _decrypt } from 'eccrypto'
+import randomBytes from 'randombytes'
+import crypto from 'crypto';
 import pkg from 'secp256k1';
-const { publicKeyCreate, privateKeyVerify, ecdsaSign, ecdsaVerify } = pkg;
+const { publicKeyCreate, privateKeyVerify, ecdsaSign, ecdsaVerify, publicKeyConvert } = pkg;
 import pkg2 from 'bs58';
 const { encode, decode } = pkg2;
 const fromSeed = import('bip32').fromSeed;
@@ -10,20 +10,6 @@ import GrowInt from 'growint'
 import fetch from 'node-fetch'
 import { generateMnemonic as _generateMnemonic, mnemonicToSeedSync } from 'bip39'
 import { sha256 } from 'js-sha256';
-
-function generateEphemeralPrivate() {
-  for (let i = 0; i < 10; i++) {
-    const priv = crypto.randomBytes(32);
-    try {
-      const e = crypto.createECDH('secp256k1');
-      e.setPrivateKey(priv); // will throw if invalid
-      return priv;
-    } catch (err) {
-      // try again
-    }
-  }
-  throw new Error('Failed to generate valid ephemeral private key');
-}
 
 let avalon = {
     config: {
@@ -37,52 +23,52 @@ let avalon = {
         dmcaAllowedContents: [],
     },
     init: (config) => {
-        avalon.config = Object.assign(avalon.config,config)
+        avalon.config = Object.assign(avalon.config, config)
     },
     getBlockchainHeight: (cb) => {
-        avalon.get('/count',cb)
+        avalon.get('/count', cb)
     },
     getBlock: (number, cb) => {
-        avalon.get('/block/'+number,cb)
+        avalon.get('/block/' + number, cb)
     },
     getAccount: (name, cb) => {
-        avalon.get('/account/'+name,cb)
+        avalon.get('/account/' + name, cb)
     },
     getAccountHistory: (name, lastBlock, cb) => {
-        avalon.get('/history/'+name+'/'+lastBlock,cb)
+        avalon.get('/history/' + name + '/' + lastBlock, cb)
     },
     getVotesByAccount: (name, lastTs, cb) => {
-        avalon.get('/votes/all/'+name+'/'+lastTs,cb)
+        avalon.get('/votes/all/' + name + '/' + lastTs, cb)
     },
     getPendingVotesByAccount: (name, lastTs, cb) => {
-        avalon.get('/votes/pending/'+name+'/'+lastTs,cb)
+        avalon.get('/votes/pending/' + name + '/' + lastTs, cb)
     },
     getClaimableVotesByAccount: (name, lastTs, cb) => {
-        avalon.get('/votes/claimable/'+name+'/'+lastTs,cb)
+        avalon.get('/votes/claimable/' + name + '/' + lastTs, cb)
     },
     getClaimedVotesByAccount: (name, lastTs, cb) => {
-        avalon.get('/votes/claimed/'+name+'/'+lastTs,cb)
+        avalon.get('/votes/claimed/' + name + '/' + lastTs, cb)
     },
     getAccounts: (names, cb) => {
-        avalon.get('/accounts/'+names.join(','),cb)
+        avalon.get('/accounts/' + names.join(','), cb)
     },
     getContent: (name, link, cb) => {
-        avalon.get('/content/'+name+'/'+link,cb)
+        avalon.get('/content/' + name + '/' + link, cb)
     },
     getFollowing: (name, cb) => {
-        avalon.get('/follows/'+name,cb)
+        avalon.get('/follows/' + name, cb)
     },
     getFollowers: (name, cb) => {
-        avalon.get('/followers/'+name,cb)
+        avalon.get('/followers/' + name, cb)
     },
     getPendingRewards: (name, cb) => {
-        avalon.get('/rewards/pending/'+name,cb)
+        avalon.get('/rewards/pending/' + name, cb)
     },
     getClaimedRewards: (name, cb) => {
-        avalon.get('/rewards/claimed/'+name,cb)
+        avalon.get('/rewards/claimed/' + name, cb)
     },
     getClaimableRewards: (name, cb) => {
-        avalon.get('/rewards/claimable/'+name,cb)
+        avalon.get('/rewards/claimable/' + name, cb)
     },
     generateCommentTree: (root, author, link) => {
         var replies = []
@@ -90,11 +76,11 @@ let avalon = {
         if (author === root.author && link === root.link)
             content = root
         else
-            content = root.comments[author+'/'+link]
+            content = root.comments[author + '/' + link]
 
         if (!content || !content.child || !root.comments) return []
         for (var i = 0; i < content.child.length; i++) {
-            var comment = root.comments[content.child[i][0]+'/'+content.child[i][1]]
+            var comment = root.comments[content.child[i][0] + '/' + content.child[i][1]]
             comment.replies = avalon.generateCommentTree(root, comment.author, comment.link)
             comment.ups = 0
             comment.downs = 0
@@ -109,22 +95,22 @@ let avalon = {
             comment.totals = comment.ups - comment.downs
             replies.push(comment)
         }
-        replies = replies.sort(function(a,b) {
-            return b.totals-a.totals
+        replies = replies.sort(function (a, b) {
+            return b.totals - a.totals
         })
         return replies
     },
     getDiscussionsByAuthor: (username, author, link, cb) => {
         if (!author && !link)
-            avalon.get('/blog/'+username,cb)
+            avalon.get('/blog/' + username, cb)
         else
-            avalon.get('/blog/'+username+'/'+author+'/'+link,cb)
+            avalon.get('/blog/' + username + '/' + author + '/' + link, cb)
     },
     getNewDiscussions: (author, link, cb) => {
         if (!author && !link)
-            avalon.get('/new',cb)
+            avalon.get('/new', cb)
         else
-            avalon.get('/new/'+author+'/'+link,cb)
+            avalon.get('/new/' + author + '/' + link, cb)
     },
     getP2PVideos: (author, link, cb) => {
         if (!author && !link)
@@ -134,42 +120,42 @@ let avalon = {
     },
     getHotDiscussions: (author, link, cb) => {
         if (!author && !link)
-            avalon.get('/hot',cb)
+            avalon.get('/hot', cb)
         else
-            avalon.get('/hot/'+author+'/'+link,cb)
+            avalon.get('/hot/' + author + '/' + link, cb)
     },
     getTrendingDiscussions: (author, link, cb) => {
-        if (!author && !link) 
-            avalon.get('/trending',cb)
+        if (!author && !link)
+            avalon.get('/trending', cb)
         else
-            avalon.get('/trending/'+author+'/'+link,cb)
+            avalon.get('/trending/' + author + '/' + link, cb)
     },
     getFeedDiscussions: (username, author, link, cb) => {
         if (!author && !link)
-            avalon.get('/feed/'+username,cb)
+            avalon.get('/feed/' + username, cb)
         else
-            avalon.get('/feed/'+username+'/'+author+'/'+link,cb)
+            avalon.get('/feed/' + username + '/' + author + '/' + link, cb)
     },
     getNotifications: (username, cb) => {
-        avalon.get('/notifications/'+username,cb)
+        avalon.get('/notifications/' + username, cb)
     },
     getSchedule: (cb) => {
-        avalon.get('/schedule',cb)
+        avalon.get('/schedule', cb)
     },
     getSupply: (cb) => {
-        avalon.get('/supply',cb)
+        avalon.get('/supply', cb)
     },
     getLeaders: (cb) => {
-        avalon.get('/allminers',cb)
+        avalon.get('/allminers', cb)
     },
     getRewardPool: (cb) => {
-        avalon.get('/rewardpool',cb)
+        avalon.get('/rewardpool', cb)
     },
     getRewards: (name, cb) => {
-        avalon.get('/distributed/'+name,cb)
+        avalon.get('/distributed/' + name, cb)
     },
-    get: (method,cb) => {
-        fetch(avalon.randomNode()+method, {
+    get: (method, cb) => {
+        fetch(avalon.randomNode() + method, {
             method: 'get',
             headers: {
                 'Accept': 'application/json, text/plain, */*',
@@ -193,7 +179,7 @@ let avalon = {
             } else {
                 cb(null, res)
             }
-        }).catch(function(error) {
+        }).catch(function (error) {
             cb(error)
         })
     },
@@ -229,18 +215,17 @@ let avalon = {
         if (typeof tx !== 'object')
             try {
                 tx = JSON.parse(tx)
-            } catch(e) {
+            } catch (e) {
                 console.log('invalid transaction')
                 return
             }
-
 
         tx.sender = sender
         // add timestamp to seed the hash (avoid transactions reuse)
         tx.ts = new Date().getTime()
         // hash the transaction
         tx.hash = sha256(JSON.stringify(tx));
-        tx.signature = encode(sign(Buffer.from(tx.hash, 'hex'), decode(privKey)).signature);
+        tx.signature = encode(ecdsaSign(Buffer.from(tx.hash, 'hex'), decode(privKey)).signature);
         return tx
     },
     signData: (privKey, pubKey, data, ts, username = null) => {
@@ -261,7 +246,7 @@ let avalon = {
         if (typeof tx !== 'object')
             try {
                 tx = JSON.parse(tx)
-            } catch(e) {
+            } catch (e) {
                 console.log('invalid transaction')
                 return
             }
@@ -274,10 +259,10 @@ let avalon = {
             tx.hash = createHash("SHA256", JSON.stringify(tx)).toString()
         if (!tx.signature || !Array.isArray(tx.signature))
             tx.signature = []
-        
+
         for (let k in privKeys) {
             let sign = ecdsaSign(Buffer.from(tx.hash, 'hex'), decode(privKeys[k]))
-            tx.signature.push([encode(sign.signature),sign.recid])
+            tx.signature.push([encode(sign.signature), sign.recid])
         }
         return tx
     },
@@ -321,22 +306,22 @@ let avalon = {
         // 200 with head block number if confirmed
         // 408 if timeout
         // 500 with error if transaction is invalid
-        fetch(avalon.randomNode()+'/transact', {
+        fetch(avalon.randomNode() + '/transact', {
             method: 'post',
             headers: {
                 'Accept': 'application/json, text/plain, */*',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(tx)
-        }).then(function(res) {
-            if (res.status === 500 || res.status === 408) 
-                res.json().then(function(err) {
+        }).then(function (res) {
+            if (res.status === 500 || res.status === 408)
+                res.json().then(function (err) {
                     cb(err)
                 })
             else if (res.status === 404)
-                cb({error: 'Avalon API is down'})
-            else 
-                res.text().then(function(headBlock) {
+                cb({ error: 'Avalon API is down' })
+            else
+                res.text().then(function (headBlock) {
                     cb(null, parseInt(headBlock))
                 })
         })
@@ -345,32 +330,32 @@ let avalon = {
         // sends the transaction to a node
         // 200 with head block number if transaction is valid and node added it to mempool
         // 500 with error if transaction is invalid
-        fetch(avalon.randomNode()+'/transact', {
+        fetch(avalon.randomNode() + '/transact', {
             method: 'post',
             headers: {
                 'Accept': 'application/json, text/plain, */*',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(tx)
-        }).then(function(res) {
+        }).then(function (res) {
             if (res.status === 500)
-                res.json().then(function(err) {
+                res.json().then(function (err) {
                     cb(err)
                 })
             else
-                res.text().then(function(headBlock) {
+                res.text().then(function (headBlock) {
                     cb(null, parseInt(headBlock))
                 })
         })
     },
     sendTransactionDeprecated: (tx, cb) => {
         // old and bad way of checking if a transaction is confirmed in a block
-        avalon.sendRawTransaction(tx, function(error, headBlock) {
-            if (error) 
+        avalon.sendRawTransaction(tx, function (error, headBlock) {
+            if (error)
                 cb(error)
-            else 
-                setTimeout(function() {
-                    avalon.verifyTransaction(tx, headBlock, 5, function(error, block) {
+            else
+                setTimeout(function () {
+                    avalon.verifyTransaction(tx, headBlock, 5, function (error, block) {
                         if (error) console.log(error)
                         else cb(null, block)
                     })
@@ -378,21 +363,21 @@ let avalon = {
         })
     },
     verifyTransaction: (tx, headBlock, retries, cb) => {
-        var nextBlock = headBlock+1
-        fetch(avalon.randomNode()+'/block/'+nextBlock, {
+        var nextBlock = headBlock + 1
+        fetch(avalon.randomNode() + '/block/' + nextBlock, {
             method: 'get',
             headers: {
                 'Accept': 'application/json, text/plain, */*',
                 'Content-Type': 'application/json'
             }
-        }).then(res => res.text()).then(function(text) {
+        }).then(res => res.text()).then(function (text) {
             try {
                 var block = JSON.parse(text)
             } catch (error) {
                 // block is not yet available, retrying in 1.5 secs
                 if (retries <= 0) return
                 retries--
-                setTimeout(function(){avalon.verifyTransaction(tx, headBlock, retries, cb)}, 1500)
+                setTimeout(function () { avalon.verifyTransaction(tx, headBlock, retries, cb) }, 1500)
                 return
             }
 
@@ -408,112 +393,78 @@ let avalon = {
                 cb(null, block)
             else if (retries > 0) {
                 retries--
-                setTimeout(function(){avalon.verifyTransaction(tx, nextBlock, retries, cb)},3000)
+                setTimeout(function () { avalon.verifyTransaction(tx, nextBlock, retries, cb) }, 3000)
             } else
-                cb('Failed to find transaction up to block #'+nextBlock)
+                cb('Failed to find transaction up to block #' + nextBlock)
 
         })
     },
-    encrypt(pub, message, ephemPriv, cb) {
+    encrypt: (pub, message, ephemPriv, cb) => {
+        // if no ephemPriv is passed, a new random key is generated
+        if (!cb) {
+            cb = ephemPriv
+            ephemPriv = avalon.keypair().priv
+        }
         try {
-            // support calling encrypt(pub, message, cb)
-            if (typeof cb !== 'function') {
-            cb = ephemPriv;
-            ephemPriv = null;
-            }
+            if (ephemPriv)
+                ephemPriv = decode(ephemPriv)
+            var pubBuffer = decode(pub)
+            _encrypt(pubBuffer, Buffer.from(message), {
+                ephemPrivateKey: ephemPriv
+            }).then(function (encrypted) {
+                // reducing the encrypted buffers into base 58
+                encrypted.iv = encode(encrypted.iv)
+                // compress the sender's public key to compressed format
+                // shortens the encrypted string length
+                encrypted.ephemPublicKey = publicKeyConvert(encrypted.ephemPublicKey, true)
+                encrypted.ephemPublicKey = encode(encrypted.ephemPublicKey)
+                encrypted.ciphertext = encode(encrypted.ciphertext)
+                encrypted.mac = encode(encrypted.mac)
+                encrypted = [
+                    encrypted.iv,
+                    encrypted.ephemPublicKey,
+                    encrypted.ciphertext,
+                    encrypted.mac
+                ]
 
-            const pubBuf = Buffer.isBuffer(pub) ? pub : decode(pub);
-
-            // ephemPriv may be Base58 string or Buffer; if omitted generate one
-            let ephemPrivBuf;
-            if (ephemPriv) {
-            ephemPrivBuf = Buffer.isBuffer(ephemPriv) ? ephemPriv : decode(ephemPriv);
-            } else {
-            ephemPrivBuf = generateEphemeralPrivate();
-            }
-
-            // Setup ECDH with ephemeral private key
-            const ecdh = crypto.createECDH('secp256k1');
-            ecdh.setPrivateKey(ephemPrivBuf);
-
-            // Compute shared secret
-            let shared = ecdh.computeSecret(pubBuf); // Buffer
-            // some libraries return 65-byte uncompressed; normalize by stripping leading 0x04
-            if (shared.length === 65 && shared[0] === 0x04) shared = shared.slice(1);
-
-            // KDF: SHA-512 -> AES key (first 32), MAC key (last 32)
-            const hash = crypto.createHash('sha512').update(shared).digest();
-            const aesKey = hash.slice(0, 32);
-            const macKey = hash.slice(32);
-
-            // AES-256-CBC with random IV
-            const iv = crypto.randomBytes(16);
-            const cipher = crypto.createCipheriv('aes-256-cbc', aesKey, iv);
-            const ciphertext = Buffer.concat([cipher.update(Buffer.from(message)), cipher.final()]);
-
-            // Get compressed ephemeral public key (33 bytes)
-            const ephemPub = ecdh.getPublicKey(undefined, 'compressed');
-
-            // MAC over (iv || ephemPub || ciphertext)
-            const dataToMac = Buffer.concat([iv, ephemPub, ciphertext]);
-            const mac = crypto.createHmac('sha256', macKey).update(dataToMac).digest();
-
-            // Encode each part in Base58 and join with '_'
-            const parts = [
-            encode(iv),
-            encode(ephemPub),
-            encode(ciphertext),
-            encode(mac)
-            ];
-            const output = parts.join('_');
-            cb(null, output);
-        } catch (err) {
-            cb(err);
+                // adding the _ separator character
+                encrypted = encrypted.join('_')
+                cb(null, encrypted)
+            }).catch(function (error) {
+                cb(error)
+            })
+        } catch (error) {
+            cb(error)
         }
     },
-    decrypt(priv, encryptedStr, cb) {
+    decrypt: (priv, encrypted, cb) => {
         try {
-            const privBuf = Buffer.isBuffer(priv) ? priv : decode(priv);
+            // converting the encrypted string to an array of base58 encoded strings
+            encrypted = encrypted.split('_')
 
-            const parts = encryptedStr.split('_');
-            if (parts.length !== 4) return cb(new Error('Malformed encrypted payload'));
+            // then to an object with the correct property names
+            var encObj = {}
+            encObj.iv = decode(encrypted[0])
+            encObj.ephemPublicKey = decode(encrypted[1])
+            encObj.ephemPublicKey = publicKeyConvert(encObj.ephemPublicKey, false)
+            encObj.ciphertext = decode(encrypted[2])
+            encObj.mac = decode(encrypted[3])
 
-            const iv = decode(parts[0]);
-            const ephemPub = decode(parts[1]);
-            const ciphertext = decode(parts[2]);
-            const mac = decode(parts[3]);
-
-            // ECDH using recipient private key
-            const ecdh = crypto.createECDH('secp256k1');
-            ecdh.setPrivateKey(privBuf);
-
-            let shared = ecdh.computeSecret(ephemPub);
-            if (shared.length === 65 && shared[0] === 0x04) shared = shared.slice(1);
-
-            const hash = crypto.createHash('sha512').update(shared).digest();
-            const aesKey = hash.slice(0, 32);
-            const macKey = hash.slice(32);
-
-            // Verify MAC
-            const dataToMac = Buffer.concat([iv, ephemPub, ciphertext]);
-            const expectedMac = crypto.createHmac('sha256', macKey).update(dataToMac).digest();
-            if (!crypto.timingSafeEqual(expectedMac, mac)) {
-            return cb(new Error('MAC mismatch - data corrupted or wrong key'));
-            }
-
-            // Decrypt AES-256-CBC
-            const decipher = crypto.createDecipheriv('aes-256-cbc', aesKey, iv);
-            const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-
-            cb(null, plaintext.toString());
-        } catch (err) {
-            cb(err);
+            // and we decode it with our private key
+            var privBuffer = decode(priv)
+            _decrypt(privBuffer, encObj).then(function (decrypted) {
+                cb(null, decrypted.toString())
+            }).catch(function (error) {
+                cb(error)
+            })
+        } catch (error) {
+            cb(error)
         }
     },
     randomNode: () => {
         var nodes = avalon.config.api
         if (typeof nodes === 'string') return nodes
-        else return nodes[Math.floor(Math.random()*nodes.length)]
+        else return nodes[Math.floor(Math.random() * nodes.length)]
     },
     availableBalance: (account) => {
         if (!account.voteLock)
@@ -526,12 +477,12 @@ let avalon = {
     },
     votingPower: (account) => {
         return new GrowInt(account.vt, {
-            growth:account.balance/(avalon.config.vtGrowth),
+            growth: account.balance / (avalon.config.vtGrowth),
             max: account.maxVt
         }).grow(new Date().getTime()).v
     },
     bandwidth: (account) => {
-        return new GrowInt(account.bw, {growth: Math.max(account.baseBwGrowth || 0,account.balance)/(avalon.config.bwGrowth), max:256000})
+        return new GrowInt(account.bw, { growth: Math.max(account.baseBwGrowth || 0, account.balance) / (avalon.config.bwGrowth), max: 256000 })
             .grow(new Date().getTime()).v
     },
     TransactionType: {
