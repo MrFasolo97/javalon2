@@ -126,6 +126,12 @@ let avalon = {
         else
             avalon.get('/new/'+author+'/'+link,cb)
     },
+    getP2PVideos: (author, link, cb) => {
+        if (!author && !link)
+            avalon.get('/p2p',cb)
+        else
+            avalon.get('/p2p/'+author+'/'+link,cb)
+    },
     getHotDiscussions: (author, link, cb) => {
         if (!author && !link)
             avalon.get('/hot',cb)
