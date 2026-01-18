@@ -1,4 +1,4 @@
-import { decrypt as _decrypt, encrypt as _encrypt } from "eciesjs";
+import { encrypt as _encrypt, decrypt as _decrypt } from 'eccrypto'
 import { sign } from "@noble/secp256k1";
 import randomBytes from 'randombytes';
 import pkg from 'secp256k1';
