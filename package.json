@@ -47,7 +47,9 @@
   },
   "overrides": {
     "terser": "^5.31.0",
-    "acorn": "^8.12.1"
+    "acorn": "^8.12.1",
+    "elliptic": "^6.6.1",
+    "secp256k1": "^5.0.0"
   },
   "browserify": {
     "transform": [
